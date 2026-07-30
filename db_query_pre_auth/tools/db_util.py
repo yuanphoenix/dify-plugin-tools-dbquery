@@ -37,7 +37,7 @@ class DbUtil:
 
     def get_driver_name(self):
         driver_name = self.db_type
-        if self.db_type == 'mysql':
+        if self.db_type in {'mysql', 'doris'}:
             driver_name = 'mysql+pymysql'
         elif self.db_type in {'oracle', 'oracle11g'}:
             driver_name = 'oracle+oracledb'
@@ -45,6 +45,8 @@ class DbUtil:
             driver_name = 'postgresql+psycopg2'
         elif self.db_type == 'mssql':
             driver_name = 'mssql+pymssql'
+        elif self.db_type == 'dm':
+            driver_name = 'dm+dmPython'
         return driver_name
 
     def get_url(self):
@@ -63,7 +65,7 @@ class DbUtil:
             url = f"{url}{parsed_database}"
         if self.is_not_empty(self.properties):
             url = f"{url}?{self.properties}"
-        logging.info(f"url: {url}")
+        logging.info("Creating %s database connection", self.db_type)
         return url
 
     def close(self):
@@ -98,7 +100,7 @@ class DbUtil:
         return records
 
     def test_sql(self):
-        if self.db_type in {'oracle', 'oracle11g'}:
+        if self.db_type in {'oracle', 'oracle11g', 'dm'}:
             return "SELECT 1 FROM DUAL"
         else:
             return "SELECT 1"
