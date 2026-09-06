@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 from urllib import parse
 from uuid import UUID
-
+from decimal import Decimal
 import oracledb
 import pandas as pd
 from pandas import Timestamp
@@ -73,30 +73,31 @@ class DbUtil:
         self.engine.dispose()
 
     def run_query(self, query_sql: str) -> list[dict]:
-        '''
-        Run SQL Query
-        '''
-        query_sql = query_sql.replace('%', '%%')
-        df = pd.read_sql_query(sql=query_sql, con=self.engine, parse_dates="%Y-%m-%d %H:%M:%S")
-        df = df.fillna('')
-        records = []
-        if len(df) > 0:
-            records = df.to_dict(orient="records")
+        df = pd.read_sql_query(
+            sql=query_sql,
+            con=self.engine
+        )
+        records = df.to_dict(orient="records")
         for record in records:
-            for key in record:
-                value = record[key]
-                # First, check if it is None or an empty string
-                if value is None or value == '':
-                    continue
-                if isinstance(value, Timestamp):
-                    record[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+            for key, value in record.items():
+                if pd.isna(value):
+                    record[key] = ''
+
+                elif isinstance(value, Timestamp):
+                    record[key] = value.strftime(
+                        '%Y-%m-%d %H:%M:%S'
+                    )
+
                 elif isinstance(value, datetime.date):
-                    record[key] = value.strftime('%Y-%m-%d')
+                    record[key] = value.strftime(
+                        '%Y-%m-%d'
+                    )
+
                 elif isinstance(value, UUID):
                     record[key] = str(value)
-                elif isinstance(value, float):
-                    if value.is_integer():
-                        record[key] = int(value)
+
+                elif isinstance(value, Decimal):
+                    record[key] = float(value)
         return records
 
     def test_sql(self):
