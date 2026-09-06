@@ -7,7 +7,7 @@ from decimal import Decimal
 import oracledb
 import pandas as pd
 from pandas import Timestamp
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,text
 
 
 class DbUtil:
@@ -74,7 +74,7 @@ class DbUtil:
 
     def run_query(self, query_sql: str) -> list[dict]:
         df = pd.read_sql_query(
-            sql=query_sql,
+            sql=text(query_sql),
             con=self.engine
         )
         records = df.to_dict(orient="records")
