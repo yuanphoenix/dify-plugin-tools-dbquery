@@ -73,8 +73,9 @@ class DbUtil:
         self.engine.dispose()
 
     def run_query(self, query_sql: str) -> list[dict]:
+        query_sql =query_sql.replace("%", "%%")
         df = pd.read_sql_query(
-            sql=text(query_sql),
+            sql=query_sql,
             con=self.engine
         )
         records = df.to_dict(orient="records")
