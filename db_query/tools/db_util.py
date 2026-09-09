@@ -1,13 +1,37 @@
 import datetime
 import logging
+import re
 from typing import Optional
 from urllib import parse
 from uuid import UUID
-from decimal import Decimal
+
 import oracledb
 import pandas as pd
 from pandas import Timestamp
-from sqlalchemy import create_engine,text
+from sqlalchemy import create_engine
+from sqlalchemy.dialects import registry
+from sqlalchemy.dialects.postgresql.psycopg2 import PGDialect_psycopg2
+from sqlalchemy.engine import Connection
+
+
+class KingbaseDialect(PGDialect_psycopg2):
+    """Psycopg2 dialect with support for the KingbaseES version format."""
+
+    name = 'kingbase'
+
+    def _get_server_version_info(self, connection: Connection) -> tuple[int, ...]:
+        version = connection.exec_driver_sql("select pg_catalog.version()").scalar()
+        match = (
+            re.match(r"KingbaseES V(\d{3})R(\d{3})C(\d{3})", version)
+            if isinstance(version, str)
+            else None
+        )
+        if match:
+            return tuple(int(part) for part in match.groups())
+        return super()._get_server_version_info(connection)
+
+
+registry.register("kingbase.psycopg2", __name__, "KingbaseDialect")
 
 
 class DbUtil:
@@ -43,6 +67,8 @@ class DbUtil:
             driver_name = 'oracle+oracledb'
         elif self.db_type == 'postgresql':
             driver_name = 'postgresql+psycopg2'
+        elif self.db_type == 'kingbase':
+            driver_name = 'kingbase+psycopg2'
         elif self.db_type == 'mssql':
             driver_name = 'mssql+pymssql'
         elif self.db_type == 'dm':
@@ -73,34 +99,31 @@ class DbUtil:
         self.engine.dispose()
 
     def run_query(self, query_sql: str) -> list[dict]:
-        query_sql =query_sql.replace("%", "%%")
-        df = pd.read_sql_query(
-            sql=query_sql,
-            con=self.engine
-        )
-        records = df.to_dict(orient="records")
+        '''
+        Run SQL Query
+        '''
+        query_sql = query_sql.replace('%', '%%')
+        df = pd.read_sql_query(sql=query_sql, con=self.engine, parse_dates="%Y-%m-%d %H:%M:%S")
+        df = df.fillna('')
+        records = []
+        if len(df) > 0:
+            records = df.to_dict(orient="records")
         for record in records:
-            for key, value in record.items():
-                if pd.isna(value):
-                    record[key] = ''
-
-                elif isinstance(value, Timestamp):
-                    record[key] = value.strftime(
-                        '%Y-%m-%d %H:%M:%S'
-                    )
-
+            for key in record:
+                value = record[key]
+                # First, check if it is None or an empty string
+                if value is None or value == '':
+                    continue
+                if isinstance(value, Timestamp):
+                    record[key] = value.strftime('%Y-%m-%d %H:%M:%S')
                 elif isinstance(value, datetime.date):
-                    record[key] = value.strftime(
-                        '%Y-%m-%d'
-                    )
-
+                    record[key] = value.strftime('%Y-%m-%d')
                 elif isinstance(value, UUID):
                     record[key] = str(value)
-
-                elif isinstance(value, Decimal):
-                    record[key] = float(value)
+                elif isinstance(value, float):
+                    if value.is_integer():
+                        record[key] = int(value)
         return records
-
 
     def test_sql(self):
         if self.db_type in {'oracle', 'oracle11g', 'dm'}:
